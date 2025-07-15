@@ -1,20 +1,23 @@
 package au.com.telstra.simcardactivator.controller;
 
 import au.com.telstra.simcardactivator.model.SimActivationRequest;
+import au.com.telstra.simcardactivator.repository.SimCardActivationRepo;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/sim")
 public class SimActivationController {
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    @Autowired
+    private SimCardActivationRepo repo;
 
     @PostMapping("/activate")
     public ResponseEntity<String> activatesim(@RequestBody SimActivationRequest request) {
@@ -27,12 +30,35 @@ public class SimActivationController {
             ResponseEntity<Map> response = restTemplate.postForEntity(actuatorUrl, payload, Map.class);
             boolean success = (Boolean) response.getBody().get("success");
 
-            System.out.println("Activation " + (success ? "successful" : "failed") + " for ICCID: " + request.getIccid());
+            //save activation result
+            SimActivationRequest record = new SimActivationRequest(
+                    request.getIccid(),
+                    request.getCustomerEmail(),
+                    success
+            );
+            repo.save(record);
+
             return ResponseEntity.ok("Activation " + (success ? "successful" : "failed"));
 
         } catch (Exception e) {
-            System.out.println("Error during activation: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(500).body("Activation error");
+        }
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<?> getSimCardStatus(@RequestParam Long simCardId){
+        Optional<SimActivationRequest> result = repo.findById(simCardId);
+        if(result.isPresent()){
+            SimActivationRequest sim = result.get();
+            Map<String,Object> response = Map.of(
+                    "iccid", sim.getIccid(),
+                    "customerEmail", sim.getCustomerEmail(),
+                    "active", sim.isActive()
+            );
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(404).body("SIM card not found");
         }
     }
 
