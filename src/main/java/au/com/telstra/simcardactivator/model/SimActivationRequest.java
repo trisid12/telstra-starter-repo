@@ -27,7 +27,7 @@ public class SimActivationRequest {
     public Long getId() {
         return id;
     }
-    
+
     public String getIccid() {
         return iccid;
     }
